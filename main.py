@@ -1,4 +1,3 @@
-
 from cryptography.hazmat.primitives.hashes import Hash, SHA256
 from colorama import Fore, init
 from hmac import compare_digest
@@ -11,8 +10,6 @@ import sys
 logging.basicConfig(
     format="[%(levelname)s]:%(lineno)s > %(message)s"
 )
-
-CHUNK_SIZE: int = 4096
 
 
 def validate_file(file_path: Path) -> bool:
@@ -28,7 +25,7 @@ def validate_file(file_path: Path) -> bool:
     return True
 
 
-def hash_file(file_path: Path) -> str | None:
+def hash_file(file_path: Path, chunk_size: int = 4096) -> str | None:
     """
     Calculate the SHA-256 hash of a file and return its
     hexadecimal digest.
@@ -40,7 +37,7 @@ def hash_file(file_path: Path) -> str | None:
         with open(file_path, "rb") as file:
             sha256: Hash = Hash(SHA256())
 
-            while chunk := file.read(CHUNK_SIZE):
+            while chunk := file.read(chunk_size):
                 sha256.update(chunk)
 
         return sha256.finalize().hex()
@@ -54,7 +51,7 @@ def hash_file(file_path: Path) -> str | None:
         return None
 
 
-def verify(file_path: Path, expected_hash: str) -> int:
+def verify(file_path: Path, expected_hash: str, chunk_size: int) -> int:
     """Verify a file against an expected SHA-256 hash."""
     if (
         len(expected_hash) != 64
@@ -63,7 +60,7 @@ def verify(file_path: Path, expected_hash: str) -> int:
         logging.error("Invalid SHA-256 hexadecimal hash.")
         return 1
 
-    file_hash = hash_file(file_path)
+    file_hash = hash_file(file_path, chunk_size)
 
     if file_hash is None:
         logging.error("Could not complete hash verification.")
@@ -77,9 +74,9 @@ def verify(file_path: Path, expected_hash: str) -> int:
     return 2
 
 
-def create(file_path: Path) -> int:
+def create(file_path: Path, chunk_size: int) -> int:
     """Generate and print a file's SHA-256 hash."""
-    file_hash = hash_file(file_path)
+    file_hash = hash_file(file_path, chunk_size)
 
     if file_hash is None:
         logging.error("Could not generate the file hash.")
@@ -96,6 +93,14 @@ if __name__ == "__main__":
         epilog="Created by thiagosantosjrdev",
     )
 
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument(
+        "-cs", "--chunk-size",
+        type=int,
+        default=4096,
+        help="Chunk size for reading the file in bytes (default: 4096)"
+    )
+
     subparsers = parser.add_subparsers(
         dest="command",
         title="Available commands",
@@ -104,6 +109,7 @@ if __name__ == "__main__":
 
     parser_create = subparsers.add_parser(
         "create",
+        parents=[parent_parser],
         help="Generate a file's SHA-256 hash",
     )
     parser_create.add_argument(
@@ -114,6 +120,7 @@ if __name__ == "__main__":
 
     parser_verify = subparsers.add_parser(
         "verify",
+        parents=[parent_parser],
         help="Verify a file's SHA-256 hash",
     )
     parser_verify.add_argument(
@@ -131,7 +138,7 @@ if __name__ == "__main__":
     init()
 
     if args.command == "create":
-        sys.exit(create(args.file))
+        sys.exit(create(args.file, args.chunk_size))
 
     elif args.command == "verify":
-        sys.exit(verify(args.file, args.hash))
+        sys.exit(verify(args.file, args.hash, args.chunk_size))
